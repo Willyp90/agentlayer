@@ -19,8 +19,8 @@ const EVENT_CONFIG: Record<
   AuditEventType,
   { label: string; className: string; icon: React.ReactNode }
 > = {
-  capability_called: {
-    label: "capability",
+  key_used: {
+    label: "key used",
     className: "border-accent/30 text-accent bg-accent/8",
     icon: <Terminal size={10} />,
   },
@@ -42,7 +42,7 @@ const EVENT_CONFIG: Record<
 };
 
 const ALL_EVENT_TYPES: AuditEventType[] = [
-  "capability_called",
+  "key_used",
   "key_generated",
   "key_revoked",
   "auth_failed",
