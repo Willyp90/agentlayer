@@ -1,0 +1,139 @@
+// Version: 1.0.0
+type ApiKey__830413305 =
+  {
+    active : Bool;
+    callCount : Nat;
+    createdAt : Int;
+    id : Text;
+    lastUsedAt : ?Int;
+    name : Text;
+    ownerId : Text;
+    totalCyclesUsed : Nat
+  };
+type AuditEvent__278237801 =
+  {
+    details : Text;
+    eventType : Text;
+    id : Text;
+    keyId : Text;
+    timestamp : Int;
+    userId : Text
+  };
+type CacheEntry__701481817 =
+  {fetchedAt : Int; lastAccessedAt : Int; response : Text};
+type Data__791452850<K, V> =
+  {var count : Nat__490723111; kvs : [var ?(K, V)]};
+type ExecutionLog__37060866 =
+  {
+    apiKeyId : ?Text;
+    capability : Text;
+    cyclesUsed : ?Nat;
+    errorCode : ?Text;
+    errorMessage : ?Text;
+    executionId : Text;
+    input : Text;
+    latencyMs : Nat;
+    output : ?Text;
+    success : Bool;
+    timestamp : Timestamp__301639476;
+    user : UserId__158757552
+  };
+type Internal__8484328<K, V> =
+  {children : [var ?Node__46230540<K, V>]; data : Data__791452850<K, V>};
+type Leaf__809889148<K, V> = {data : Data__791452850<K, V>};
+type Nat__490723111 = Nat__920180692;
+type Nat__920180692 = Nat;
+type Node__46230540<K, V> =
+  {#internal : Internal__8484328<K, V>; #leaf : Leaf__809889148<K, V>};
+type TestCategory__999072592 =
+  {
+    #Determinism;
+    #EdgeCase;
+    #ErrorHandling;
+    #InvalidType;
+    #MissingRequiredField;
+    #OptionalFieldCombination;
+    #OptionalFieldIndividual;
+    #OutputSchema;
+    #RequiredFieldsOnly
+  };
+type TestResult__470877844 =
+  {
+    actualErrorCode : ?Text;
+    actualOutput : ?Text;
+    actualSuccess : Bool;
+    capabilityName : Text;
+    category : TestCategory__999072592;
+    description : Text;
+    failureReason : ?Text;
+    inputJson : Text;
+    latencyMs : Nat;
+    passed : Bool;
+    testId : Text
+  };
+type TestRunMetadata__58759117 =
+  {
+    capabilityName : ?Text;
+    completedAt : Timestamp__301639476;
+    failed : Nat;
+    passed : Nat;
+    runId : Text;
+    startedAt : Timestamp__301639476;
+    totalTests : Nat
+  };
+type TestRunResult__315964091 =
+  {
+    capabilityName : ?Text;
+    completedAt : Timestamp__301639476;
+    failed : Nat;
+    passed : Nat;
+    results : [TestResult__470877844];
+    runId : Text;
+    startedAt : Timestamp__301639476;
+    totalTests : Nat
+  };
+type Timestamp__301639476 = Int;
+type UserId__158757552 = Text;
+actor {
+  stable adminState : {var adminId : ?UserId__158757552};
+  stable apiKeyCounter : {var count : Nat};
+  stable apiKeysList :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?ApiKey__830413305]];
+      var elementIndex : Nat__490723111
+    };
+  stable auditEventCounter : {var count : Nat};
+  stable auditLog :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?AuditEvent__278237801]];
+      var elementIndex : Nat__490723111
+    };
+  stable execCounter : {var count : Nat};
+  stable httpCacheMap :
+    {
+      var root : Node__46230540<Text, CacheEntry__701481817>;
+      var size : Nat__490723111
+    };
+  stable logs :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?ExecutionLog__37060866]];
+      var elementIndex : Nat__490723111
+    };
+  stable objectStore :
+    {var root : Node__46230540<Text, Text>; var size : Nat__490723111};
+  stable testRunCounter : {var count : Nat};
+  stable testRunHistory :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?TestRunMetadata__58759117]];
+      var elementIndex : Nat__490723111
+    };
+  stable testRuns :
+    {
+      var root : Node__46230540<Text, TestRunResult__315964091>;
+      var size : Nat__490723111
+    }
+};

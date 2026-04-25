@@ -1,0 +1,27 @@
+{
+  "overview": "AgentLayer is a production-grade ICP-native execution layer for AI agents, providing 42 deterministic, composable primitives as callable canister methods. Features a standardized execution contract, comprehensive admin validation dashboard with automated test suites for every capability, and usage-based monitoring.",
+  "features": [
+    "42 deterministic capabilities across 12 categories",
+    "Admin validation dashboard with automated test suite generation",
+    "Per-capability test execution engine with pass/fail tracking",
+    "Comprehensive test coverage: required fields, optional fields, combinations, edge cases, error handling",
+    "Internet Identity authentication with first-user-as-admin assignment",
+    "Live playground for testing any capability",
+    "API key management for agent/headless access",
+    "Execution logs and usage analytics (user-scoped)",
+    "HTTP outcall caching for fetch_url capability",
+    "Full audit log for API key lifecycle events"
+  ],
+  "category": "developer-tools",
+  "tags": [
+    "ai-agents",
+    "icp",
+    "primitives",
+    "execution-layer",
+    "validation",
+    "canister",
+    "deterministic",
+    "api"
+  ],
+  "last_updated": "2026-04-10T18:49:44.170Z"
+}

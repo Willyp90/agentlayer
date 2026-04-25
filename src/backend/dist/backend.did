@@ -1,0 +1,226 @@
+type UserId = text;
+type UserCount = 
+ record {
+   count: nat;
+   user: UserId;
+ };
+type UsageSummary = 
+ record {
+   callsThisMonth: nat;
+   dailyCounts: vec DailyCount;
+   perCapability: vec CapabilityCount;
+   perUser: vec UserCount;
+   totalCalls: nat;
+ };
+type TransformArgs = 
+ record {
+   context: blob;
+   response: HttpRequestResult;
+ };
+type Timestamp = int;
+type TestRunResult = 
+ record {
+   capabilityName: opt text;
+   completedAt: Timestamp;
+   failed: nat;
+   passed: nat;
+   results: vec TestResult;
+   runId: text;
+   startedAt: Timestamp;
+   totalTests: nat;
+ };
+type TestRunMetadata = 
+ record {
+   capabilityName: opt text;
+   completedAt: Timestamp;
+   failed: nat;
+   passed: nat;
+   runId: text;
+   startedAt: Timestamp;
+   totalTests: nat;
+ };
+type TestResult = 
+ record {
+   actualErrorCode: opt text;
+   actualOutput: opt text;
+   actualSuccess: bool;
+   capabilityName: text;
+   category: TestCategory;
+   description: text;
+   failureReason: opt text;
+   inputJson: text;
+   latencyMs: nat;
+   passed: bool;
+   testId: text;
+ };
+type TestCategory = 
+ variant {
+   Determinism;
+   EdgeCase;
+   ErrorHandling;
+   InvalidType;
+   MissingRequiredField;
+   OptionalFieldCombination;
+   OptionalFieldIndividual;
+   OutputSchema;
+   RequiredFieldsOnly;
+ };
+type LogFilter = 
+ record {
+   capability: opt text;
+   failureOnly: opt bool;
+   limit: opt nat;
+   offset: opt nat;
+   successOnly: opt bool;
+   user: opt text;
+ };
+type HttpRequestResult = 
+ record {
+   body: blob;
+   headers: vec HttpHeader;
+   status: nat;
+ };
+type HttpHeader = 
+ record {
+   name: text;
+   value: text;
+ };
+type ExecutionResult = 
+ record {
+   cyclesUsed: opt nat;
+   error: opt ExecError;
+   executionId: text;
+   latencyMs: nat;
+   output: opt text;
+   success: bool;
+ };
+type ExecutionLog = 
+ record {
+   apiKeyId: opt text;
+   capability: text;
+   cyclesUsed: opt nat;
+   errorCode: opt text;
+   errorMessage: opt text;
+   executionId: text;
+   input: text;
+   latencyMs: nat;
+   output: opt text;
+   success: bool;
+   timestamp: Timestamp;
+   user: UserId;
+ };
+type ExecError = 
+ record {
+   code: text;
+   message: text;
+ };
+type DailyCount = 
+ record {
+   count: nat;
+   date: text;
+ };
+type CapabilityTestStatus = 
+ record {
+   capabilityName: text;
+   category: text;
+   failed: nat;
+   lastRunAt: opt Timestamp;
+   passed: nat;
+   status: text;
+   totalTests: nat;
+ };
+type CapabilityOutput = 
+ record {
+   description: text;
+   key: text;
+   outputType: text;
+ };
+type CapabilityInput = 
+ record {
+   description: text;
+   inputType: text;
+   key: text;
+   required: bool;
+ };
+type CapabilityInfo = 
+ record {
+   category: text;
+   constraints: vec text;
+   description: text;
+   exampleInput: text;
+   exampleOutput: text;
+   inputs: vec CapabilityInput;
+   name: text;
+   outputs: vec CapabilityOutput;
+ };
+type CapabilityCount = 
+ record {
+   count: nat;
+   name: text;
+ };
+type AuditEvent = 
+ record {
+   details: text;
+   eventType: text;
+   id: text;
+   keyId: text;
+   timestamp: int;
+   userId: text;
+ };
+type ApiKeyStats = 
+ record {
+   active: bool;
+   callCount: nat;
+   keyId: text;
+   lastUsedAt: opt int;
+   totalCyclesUsed: nat;
+ };
+type ApiKey = 
+ record {
+   active: bool;
+   callCount: nat;
+   createdAt: int;
+   id: text;
+   lastUsedAt: opt int;
+   name: text;
+   ownerId: text;
+   totalCyclesUsed: nat;
+ };
+service : {
+  describe_capability: (name: text) -> (opt CapabilityInfo) query;
+  execute_capability: (capabilityName: text, inputJson: text, apiKey:
+   opt text) -> (ExecutionResult);
+  generate_api_key: (name: text) -> (variant {
+                                       err: text;
+                                       ok: ApiKey;
+                                     });
+  get_admin_status: () -> (bool);
+  get_api_key_stats: (keyId: text) ->
+   (variant {
+      err: text;
+      ok: ApiKeyStats;
+    }) query;
+  get_audit_log: (limit: nat, offset: nat) -> (vec AuditEvent) query;
+  get_capability_test_statuses: () -> (vec CapabilityTestStatus) query;
+  get_execution_logs: (filter: LogFilter) -> (vec ExecutionLog) query;
+  get_integration_info: () ->
+   (record {
+      candid_example: text;
+      http_method: text;
+      key_location: text;
+      key_param_name: text;
+      rate_limit_info: text;
+    }) query;
+  get_test_history: () -> (vec TestRunMetadata) query;
+  get_test_results: (runId: text) -> (opt TestRunResult) query;
+  get_usage_summary: () -> (UsageSummary) query;
+  list_capabilities: (categoryFilter: opt text) -> (vec CapabilityInfo) query;
+  list_my_api_keys: () -> (vec ApiKey) query;
+  revoke_api_key: (keyId: text) -> (variant {
+                                      err: text;
+                                      ok;
+                                    });
+  run_all_tests: () -> (TestRunResult);
+  run_capability_tests: (capabilityName: text) -> (TestRunResult);
+  transform_http_response: (raw: TransformArgs) -> (HttpRequestResult) query;
+}
