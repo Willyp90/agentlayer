@@ -18,6 +18,21 @@ import AdminApi "mixins/admin-api";
 
 
 actor {
+  // ── Stable snapshots for upgrade safety ────────────────────────────────────
+  stable var stableLogs : [ExecTypes.ExecutionLog] = [];
+  stable var stableExecCount : Nat = 0;
+  stable var stableObjectStore : [(Text, Text)] = [];
+  stable var stableApiKeys : [ApiKeyTypes.ApiKey] = [];
+  stable var stableApiKeyCount : Nat = 0;
+  stable var stableHttpCache : [(Text, CapLib.CacheEntry)] = [];
+  stable var stableAuditLog : [ApiKeyTypes.AuditEvent] = [];
+  stable var stableAuditEventCount : Nat = 0;
+  stable var stableAdminId : ?Text = null;
+  stable var stableTestRuns : [(Text, AdminTestTypes.TestRunResult)] = [];
+  stable var stableTestRunHistory : [AdminTestTypes.TestRunMetadata] = [];
+  stable var stableTestRunCount : Nat = 0;
+  stable var stableRateLimitBuckets : [(Text, Nat)] = [];
+
   // Execution logs (append-only, newest-last)
   let logs = List.empty<ExecTypes.ExecutionLog>();
 
@@ -54,6 +69,9 @@ actor {
   // Monotonic counter for test run ID generation
   let testRunCounter = { var count : Nat = 0 };
 
+  // API key rate-limit buckets: keyId:window -> count
+  let keyRateLimitBuckets = Map.empty<Text, Nat>();
+
   // ── HTTP transform function for IC outcalls ──────────────────────────────
   // Strips variable/non-deterministic headers so the IC subnet can reach consensus.
   public query func transform_http_response(raw : CapLib.TransformArgs) : async CapLib.HttpRequestResult {
@@ -71,7 +89,7 @@ actor {
   };
 
   include CapabilitiesApi();
-  include ExecutionApi(logs, execCounter, objectStore, httpCacheMap, transform_http_response, apiKeysList, auditLog, auditEventCounter);
+  include ExecutionApi(logs, execCounter, objectStore, httpCacheMap, transform_http_response, apiKeysList, auditLog, auditEventCounter, keyRateLimitBuckets);
   include ApiKeysApi(apiKeysList, apiKeyCounter, auditLog, auditEventCounter);
   include DeveloperApi();
 
@@ -96,4 +114,51 @@ actor {
   };
 
   include AdminApi(adminState, testRuns, testRunHistory, testRunCounter, runCapabilityForTest);
+
+  system func preupgrade() {
+    stableLogs := logs.toArray();
+    stableExecCount := execCounter.count;
+    stableObjectStore := objectStore.toArray();
+    stableApiKeys := apiKeysList.toArray();
+    stableApiKeyCount := apiKeyCounter.count;
+    stableHttpCache := httpCacheMap.toArray();
+    stableAuditLog := auditLog.toArray();
+    stableAuditEventCount := auditEventCounter.count;
+    stableAdminId := AdminLib.getAdminId(adminState);
+    stableTestRuns := testRuns.toArray();
+    stableTestRunHistory := testRunHistory.toArray();
+    stableTestRunCount := testRunCounter.count;
+    stableRateLimitBuckets := keyRateLimitBuckets.toArray();
+  };
+
+  system func postupgrade() {
+    logs.addAll(stableLogs.values());
+    execCounter.count := stableExecCount;
+
+    for ((k, v) in stableObjectStore.values()) {
+      objectStore.add(k, v);
+    };
+
+    apiKeysList.addAll(stableApiKeys.values());
+    apiKeyCounter.count := stableApiKeyCount;
+
+    for ((k, v) in stableHttpCache.values()) {
+      httpCacheMap.add(k, v);
+    };
+
+    auditLog.addAll(stableAuditLog.values());
+    auditEventCounter.count := stableAuditEventCount;
+
+    adminState.adminId := stableAdminId;
+
+    for ((k, v) in stableTestRuns.values()) {
+      testRuns.add(k, v);
+    };
+    testRunHistory.addAll(stableTestRunHistory.values());
+    testRunCounter.count := stableTestRunCount;
+
+    for ((k, v) in stableRateLimitBuckets.values()) {
+      keyRateLimitBuckets.add(k, v);
+    };
+  };
 };

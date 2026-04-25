@@ -13,7 +13,7 @@ mixin () {
       http_method = "POST";
       key_param_name = "apiKey";
       key_location = "method_parameter";
-      rate_limit_info = "No rate limits enforced currently";
+      rate_limit_info = "API keys are limited to 120 execute_capability calls per rolling minute window";
     };
   };
 

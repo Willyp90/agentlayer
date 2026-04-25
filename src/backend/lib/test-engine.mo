@@ -57,6 +57,21 @@ module {
       });
     };
 
+    // 3b. Optional combination test (first two optional fields together)
+    if (optionals.size() >= 2) {
+      let combo = [optionals[0], optionals[1]];
+      cases.add({
+        id = cap.name # "::optional_combo_2";
+        capabilityName = cap.name;
+        category = #OptionalFieldCombination;
+        description = "Execute with required fields plus two optional fields together";
+        inputJson = buildInputWithOptionals(cap, combo);
+        expectSuccess = true;
+        expectErrorCode = null;
+        expectedOutputKeys = [];
+      });
+    };
+
     // 4. Missing required field tests
     let required = cap.inputs.filter(func(i) { i.required });
     for (reqField in required.values()) {
@@ -119,6 +134,18 @@ module {
       case null {};
     };
 
+    // 7b. Malformed JSON should return INVALID_INPUT
+    cases.add({
+      id = cap.name # "::malformed_json";
+      capabilityName = cap.name;
+      category = #ErrorHandling;
+      description = "Execute with malformed JSON payload — expect validation error";
+      inputJson = "{\"incomplete\":";
+      expectSuccess = false;
+      expectErrorCode = ?("INVALID_INPUT");
+      expectedOutputKeys = [];
+    });
+
     // 8. Determinism test (same input run twice should give same output)
     cases.add({
       id = cap.name # "::determinism";
@@ -144,6 +171,16 @@ module {
     });
 
     cases.toArray();
+  };
+
+  /// Build input JSON with all required fields plus a list of optional fields.
+  public func buildInputWithOptionals(
+    cap : CapTypes.CapabilityInfo,
+    optionalFields : [CapTypes.CapabilityInput],
+  ) : Text {
+    let required = cap.inputs.filter(func(i) { i.required });
+    let fields = required.concat(optionalFields);
+    buildJsonObject(fields);
   };
 
   /// Execute all test cases and return results.

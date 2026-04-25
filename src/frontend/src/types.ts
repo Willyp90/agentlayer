@@ -101,7 +101,8 @@ export type AuditEventType =
   | "key_generated"
   | "key_revoked"
   | "key_used"
-  | "auth_failed";
+  | "auth_failed"
+  | "rate_limited";
 
 export interface AuditEvent {
   id: string;

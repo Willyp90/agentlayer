@@ -25,6 +25,9 @@ mixin (
   /// Also initialises admin on the first call (first caller becomes admin).
   /// NOTE: non-query because it may mutate state on first call.
   public shared ({ caller }) func get_admin_status() : async Bool {
+    if (caller.isAnonymous()) {
+      return false;
+    };
     let callerText = caller.toText();
     ignore AdminLib.initAdmin(adminState, callerText);
     AdminLib.isAdmin(adminState, callerText);
