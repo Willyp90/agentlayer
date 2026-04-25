@@ -1,76 +1,109 @@
-# AgentLayer Production Readiness Audit
+# AgentLayer Production Readiness Audit (April 25, 2026)
 
-## Scope Reviewed
+## 1) System Map
 
-- Backend actor wiring and state ownership in `src/backend/main.mo`.
-- Capability registry/execution path in `src/backend/lib/capabilities.mo` and `src/backend/lib/execution.mo`.
-- Capability test engine and admin test APIs in `src/backend/lib/test-engine.mo` and `src/backend/mixins/admin-api.mo`.
-- API key management and usage/audit tracking in `src/backend/mixins/api-keys-api.mo`, `src/backend/lib/api-keys.mo`, and `src/backend/mixins/execution-api.mo`.
-- Frontend contract alignment and admin/usage/API key pages in `src/frontend/src/types.ts`, `src/frontend/src/hooks/useBackend.ts`, and key pages.
-- Public API surface in `src/backend/dist/backend.did`.
+### Backend endpoint inventory (from DID + mixins)
 
-## Goal Coverage Summary
+| Endpoint | Source mixin | Auth model | Frontend usage |
+|---|---|---|---|
+| `list_capabilities` | `mixins/capabilities-api.mo` | Public | `useCapabilities` on Capabilities + Playground pages |
+| `describe_capability` | `mixins/capabilities-api.mo` | Public | `useCapability` on capability detail page |
+| `execute_capability` | `mixins/execution-api.mo` | Caller principal or API key owner attribution | Playground execution |
+| `get_execution_logs` | `mixins/execution-api.mo` | Caller-scoped | Logs page |
+| `get_usage_summary` | `mixins/execution-api.mo` | Caller-scoped | Usage page |
+| `generate_api_key` | `mixins/api-keys-api.mo` | Authenticated caller only | API Keys page |
+| `revoke_api_key` | `mixins/api-keys-api.mo` | Owner-only | API Keys page |
+| `list_my_api_keys` | `mixins/api-keys-api.mo` | Caller-scoped | API Keys page |
+| `get_api_key_stats` | `mixins/api-keys-api.mo` | Owner-only | **Not currently consumed by frontend** |
+| `get_audit_log` | `mixins/api-keys-api.mo` | Caller-scoped | Audit Log page |
+| `get_integration_info` | `mixins/developer-api.mo` | Public query | **Not currently consumed (Integration page uses static docs)** |
+| `get_admin_status` | `mixins/admin-api.mo` | Caller compared with bootstrap admin | Layout + Admin Validation gate |
+| `run_all_tests` | `mixins/admin-api.mo` | Admin-only | Admin Validation page |
+| `run_capability_tests` | `mixins/admin-api.mo` | Admin-only | Admin Validation page |
+| `get_test_results` | `mixins/admin-api.mo` | Admin-only | Admin Validation page |
+| `get_test_history` | `mixins/admin-api.mo` | Admin-only | Admin Validation page |
+| `get_capability_test_statuses` | `mixins/admin-api.mo` | Admin-only | Admin Validation page |
+| `transform_http_response` | `main.mo` | Internal/system support | Not directly used by frontend |
 
-### 1) Capability tester works and verifies capabilities correctly
+### Contract mismatches / dead-surface notes
 
-Status: **Partially ready** (improved in this patch).
+- `get_api_key_stats` and `get_integration_info` are exposed but not wired through frontend hooks/pages.
+- Audit event taxonomy is backend `Text`; frontend enforces a narrow union type (now expanded to include `rate_limited`).
 
-What was fixed:
-- Test expectations for validation failures now align with actual backend error codes (`INVALID_INPUT`), preventing systematic false negatives in generated tests.
-- Determinism tests now fail explicitly when the second run fails, rather than only comparing outputs.
+## 2) Findings (Prioritized)
 
-Remaining gaps:
-- Auto-generated test inputs still rely on heuristic defaults, so some capabilities with strict semantic constraints may fail tests for reasons unrelated to capability correctness.
-- Output schema verification is key-presence based string matching, not structural JSON validation.
-- No persisted baseline or regression gating by capability category/severity.
+### P0
 
-### 2) API usage tracking logic correctness
+1. **Admin bootstrap could be captured by anonymous caller.**
+   - Root cause: `get_admin_status` always called `initAdmin` with caller text, including anonymous principal.
+   - Risk: admin lock-in to anonymous identity, effectively denying legitimate admin operations.
+   - Fix: reject anonymous caller from bootstrap path (`false` response, no mutation).
 
-Status: **Mostly correct, with production hardening needed**.
+2. **No upgrade persistence for critical runtime state.**
+   - Root cause: logs, keys, audit data, caches, and counters were held only in in-memory structures.
+   - Risk: data loss across upgrade/redeploy, broken observability/accounting continuity.
+   - Fix: added `stable var` snapshots and `preupgrade`/`postupgrade` hydration for execution logs, object store, API keys, audit log, admin state, test runs/history, counters, and key rate-limit buckets.
 
-Strengths:
-- Usage attribution with API keys maps execution to key owner and increments call count.
-- Cycle usage is recorded per key on successful dispatch completion.
-- User-scoped usage summary and logs are available.
+### P1
 
-Risks / hardening needs:
-- State is in-memory only (no stable persistence strategy shown for upgrades).
-- Audit taxonomy is open text; lacks strict enum guardrails across frontend/backend.
-- Aggregations are list/scan based and may degrade at larger log volumes.
-- No explicit per-key rate limiting or abuse controls.
+1. **API key abuse posture lacked any throttling.**
+   - Root cause: no server-side request cap in `execute_capability` for API-key traffic.
+   - Risk: runaway automated usage / accidental burst / spend risk.
+   - Fix: per-key per-minute rate limiter (`120/min`) with `RATE_LIMITED` execution error and `rate_limited` audit events.
 
-### 3) API endpoints readiness
+2. **Capability test engine missed required categories from quality bar.**
+   - Root cause: no optional-combination scenario or malformed-JSON error-handling test generation.
+   - Risk: false confidence in capability validation/error semantics.
+   - Fix: added `OptionalFieldCombination` and `ErrorHandling` malformed JSON test generation.
 
-Status: **Functionally broad, but not yet fully production hardened**.
+### P2
 
-Strengths:
-- Core endpoint groups exist: capabilities, execution, usage/logs, API keys, admin tests.
-- DID contract is generated and frontend hook coverage exists.
+1. **API key naming validation too permissive.**
+   - Root cause: no trim/empty/length checks on key name.
+   - Risk: poor audit readability and UX inconsistencies.
+   - Fix: trim + reject empty names + enforce 64-char max.
 
-Gaps:
-- No explicit versioning/deprecation strategy.
-- Error code semantics are not uniformly centralized across all modules.
-- Admin bootstrap (`first caller becomes admin`) is convenient for dev but risky for production deployments unless deployment process guarantees first-caller control.
+## 3) Implemented Changes (file-by-file)
 
-## Prioritized Production Worklist
+- `src/backend/mixins/admin-api.mo`
+  - Blocked anonymous admin bootstrap.
+- `src/backend/main.mo`
+  - Added stable snapshots and upgrade hooks for production-safe state continuity.
+  - Added in-memory key rate-limit bucket map and passed it into execution mixin.
+- `src/backend/mixins/execution-api.mo`
+  - Added API key rate limiting with consistent error + audit + execution log behavior.
+- `src/backend/mixins/api-keys-api.mo`
+  - Added API key name validation/normalization.
+- `src/backend/lib/test-engine.mo`
+  - Added optional field combination test generation.
+  - Added malformed JSON error-handling test generation.
+- `src/backend/types/api-keys.mo`
+  - Documented expanded audit event taxonomy to include `rate_limited`.
+- `src/backend/mixins/developer-api.mo`
+  - Updated integration rate-limit descriptor to reflect real behavior.
+- `src/frontend/src/types.ts`
+  - Added `rate_limited` to `AuditEventType` union.
+- `src/frontend/src/pages/AuditLogPage.tsx`
+  - Added rendering/filtering for `rate_limited` audit events.
 
-1. **Persistence & upgrade safety**
-   - Introduce stable state serialization/migration for logs, keys, audits, test history, and caches.
-2. **Capability test engine robustness**
-   - Replace heuristic input generation with capability-provided fixture contracts or per-capability test vectors.
-   - Upgrade output checks to parsed JSON schema validation.
-3. **Security hardening**
-   - Add API key scopes, rotation metadata, and optional expiration.
-   - Add rate limiting/throttling and suspicious-activity heuristics.
-4. **Observability**
-   - Add structured metrics for endpoint latency/error cardinality and cache hit rate.
-   - Add explicit health-check/smoke test endpoint strategy.
-5. **Contract governance**
-   - Add endpoint versioning policy and changelog discipline.
+## 4) Verification commands
 
-## Changes made in this patch
+- `cd src/backend && mops check --fix`
+- `cd src/backend && mops build`
+- `pnpm bindgen`
+- `cd src/frontend && pnpm install --prefer-offline`
+- `cd src/frontend && pnpm typecheck`
+- `cd src/frontend && pnpm build`
 
-- Aligned capability test engine validation-error expectations to `INVALID_INPUT`.
-- Improved determinism test behavior to fail when second execution fails.
-- Aligned frontend TypeScript contracts with backend DID fields and audit event taxonomy (`key_used`, `totalCyclesUsed`, `cyclesUsed`, `apiKeyId`).
+## 5) Residual Risk / Follow-ups
 
+1. **Determinism checks are output-text normalized comparisons, not semantic AST JSON compare.**
+2. **No long-window key scope/expiry model yet** (current hardening adds throttling only).
+3. **Rate limiter buckets currently persist unless manually pruned** (functional but can grow under very high key churn).
+4. **`get_api_key_stats` and `get_integration_info` remain unconsumed in UI** (not unsafe, but dead-surface debt).
+
+## 6) Current readiness verdict
+
+**CONDITIONALLY_READY**
+
+The system is materially safer than baseline (admin bootstrap hardening, upgrade persistence, API-key throttling, broader capability test coverage), but still needs additional operational hardening (schema-level output assertions, richer key governance/scopes/expiry, and scalable pruning/indexing strategies) before a strict `READY` designation.

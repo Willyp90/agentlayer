@@ -18,7 +18,9 @@ mixin (
   apiKeys : List.List<ApiKeyTypes.ApiKey>,
   auditLog : List.List<ApiKeyTypes.AuditEvent>,
   auditEventCounter : { var count : Nat },
+  keyRateLimitBuckets : Map.Map<Text, Nat>,
 ) {
+  let apiKeyRateLimitPerMinute : Nat = 120;
 
   /// Validates input, executes the named capability, records a log entry, and returns the result.
   /// If apiKey is provided, it is validated and usage is attributed to the key owner's principal.
@@ -51,6 +53,20 @@ mixin (
             return result;
           };
           case (?ownerId) {
+            if (isRateLimited(keyId, startNs)) {
+              execAddAuditEvent("rate_limited", keyId, ownerId, "Rate limit exceeded for execute_capability: " # capabilityName);
+              let latencyMs : Nat = Int.abs(Time.now() - startNs) / 1_000_000;
+              let result : ExecTypes.ExecutionResult = {
+                success = false;
+                output = null;
+                error = ?{ code = "RATE_LIMITED"; message = "API key has exceeded the per-minute request limit" };
+                executionId = execId;
+                latencyMs;
+                cyclesUsed = null;
+              };
+              logs.add(ExecLib.buildLog(result, ownerId, capabilityName, inputJson, startNs, ?keyId));
+              return result;
+            };
             ApiKeyLib.recordUsage(apiKeys, keyId, startNs);
             execAddAuditEvent("key_used", keyId, ownerId, "execute_capability: " # capabilityName);
             ownerId;
@@ -143,6 +159,21 @@ mixin (
       details;
     };
     auditLog.add(event);
+  };
+
+  func isRateLimited(keyId : Text, nowNs : Int) : Bool {
+    let currentWindow = nowNs / 60_000_000_000;
+    let bucketKey = keyId # ":" # currentWindow.toText();
+    let currentCount = switch (keyRateLimitBuckets.get(bucketKey)) {
+      case (?n) n;
+      case null 0;
+    };
+    if (currentCount >= apiKeyRateLimitPerMinute) {
+      true;
+    } else {
+      keyRateLimitBuckets.add(bucketKey, currentCount + 1);
+      false;
+    };
   };
 
 };

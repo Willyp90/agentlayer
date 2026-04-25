@@ -39,6 +39,11 @@ const EVENT_CONFIG: Record<
     className: "border-yellow-400/30 text-yellow-400 bg-yellow-400/8",
     icon: <AlertTriangle size={10} />,
   },
+  rate_limited: {
+    label: "rate limited",
+    className: "border-orange-400/30 text-orange-400 bg-orange-400/8",
+    icon: <AlertTriangle size={10} />,
+  },
 };
 
 const ALL_EVENT_TYPES: AuditEventType[] = [
@@ -46,6 +51,7 @@ const ALL_EVENT_TYPES: AuditEventType[] = [
   "key_generated",
   "key_revoked",
   "auth_failed",
+  "rate_limited",
 ];
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
@@ -97,7 +103,9 @@ function EventTypeBadge({ type }: { type: AuditEventType }) {
 
 function EventTableRow({ event }: { event: AuditEvent }) {
   const isFailure =
-    event.eventType === "auth_failed" || event.eventType === "key_revoked";
+    event.eventType === "auth_failed" ||
+    event.eventType === "key_revoked" ||
+    event.eventType === "rate_limited";
   return (
     <tr
       className="border-b border-border/50 last:border-0 hover:bg-secondary/20 transition-colors duration-100"
@@ -132,7 +140,9 @@ function EventTableRow({ event }: { event: AuditEvent }) {
 
 function EventCard({ event }: { event: AuditEvent }) {
   const isFailure =
-    event.eventType === "auth_failed" || event.eventType === "key_revoked";
+    event.eventType === "auth_failed" ||
+    event.eventType === "key_revoked" ||
+    event.eventType === "rate_limited";
   return (
     <div
       className="border border-border rounded-md bg-card p-3 space-y-2"

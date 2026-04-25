@@ -22,7 +22,7 @@ module {
   // Audit event for key lifecycle and auth actions
   public type AuditEvent = {
     id : Text;
-    eventType : Text; // 'key_generated' | 'key_revoked' | 'key_used' | 'auth_failed'
+    eventType : Text; // 'key_generated' | 'key_revoked' | 'key_used' | 'auth_failed' | 'rate_limited'
     keyId : Text;
     userId : Text;
     timestamp : Int;

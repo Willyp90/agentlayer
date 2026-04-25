@@ -18,6 +18,13 @@ mixin (
     if (caller.isAnonymous()) {
       return #err("Authentication required to generate an API key");
     };
+    let normalizedName = name.trim(#char ' ').trim(#char '\n').trim(#char '\r').trim(#char '\t');
+    if (normalizedName.size() == 0) {
+      return #err("API key name cannot be empty");
+    };
+    if (normalizedName.size() > 64) {
+      return #err("API key name must be 64 characters or fewer");
+    };
     let ownerId = caller.toText();
     apiKeyCounter.count += 1;
 
@@ -28,7 +35,7 @@ mixin (
     let key : ApiKeyTypes.ApiKey = {
       id = keyId;
       ownerId;
-      name;
+      name = normalizedName;
       createdAt = now;
       lastUsedAt = null;
       callCount = 0;
@@ -36,7 +43,7 @@ mixin (
       totalCyclesUsed = 0;
     };
     apiKeys.add(key);
-    keysAddAuditEvent("key_generated", keyId, ownerId, "Key generated with name: " # name);
+    keysAddAuditEvent("key_generated", keyId, ownerId, "Key generated with name: " # normalizedName);
     #ok(key);
   };
 
