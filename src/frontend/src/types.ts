@@ -35,6 +35,7 @@ export interface ExecutionResult {
   error?: ExecError;
   executionId: string;
   latencyMs: bigint;
+  cyclesUsed?: bigint;
 }
 
 export interface ExecutionLog {
@@ -48,6 +49,8 @@ export interface ExecutionLog {
   errorMessage?: string;
   timestamp: bigint;
   latencyMs: bigint;
+  cyclesUsed?: bigint;
+  apiKeyId?: string;
 }
 
 export interface LogFilter {
@@ -89,6 +92,7 @@ export interface ApiKey {
   lastUsedAt?: bigint;
   callCount: bigint;
   active: boolean;
+  totalCyclesUsed: bigint;
 }
 
 // ── Audit Events ──────────────────────────────────────────────────────────────
@@ -96,7 +100,7 @@ export interface ApiKey {
 export type AuditEventType =
   | "key_generated"
   | "key_revoked"
-  | "capability_called"
+  | "key_used"
   | "auth_failed";
 
 export interface AuditEvent {

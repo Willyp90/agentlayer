@@ -15,6 +15,7 @@ module {
   /// Generate a comprehensive test suite for a single capability based on its schema.
   public func generateTestSuite(cap : CapTypes.CapabilityInfo) : [Types.TestCase] {
     let cases = List.empty<Types.TestCase>();
+    let canonicalInput = canonicalSuccessInput(cap);
 
     // 1. Required-fields-only test (happy path)
     cases.add({
@@ -67,7 +68,7 @@ module {
         description = "Execute with required field '" # reqField.key # "' omitted — expect validation error";
         inputJson = buildInputMissingRequired(cap, reqField);
         expectSuccess = false;
-        expectErrorCode = ?("VALIDATION_ERROR");
+        expectErrorCode = ?("INVALID_INPUT");
         expectedOutputKeys = [];
       });
     };
@@ -81,7 +82,7 @@ module {
         description = "Execute with completely empty JSON object — expect validation error";
         inputJson = "{}";
         expectSuccess = false;
-        expectErrorCode = ?("VALIDATION_ERROR");
+        expectErrorCode = ?("INVALID_INPUT");
         expectedOutputKeys = [];
       });
     };
@@ -96,7 +97,7 @@ module {
         description = "Pass wrong type for required field '" # firstReq.key # "' — expect validation error";
         inputJson = buildInputWrongType(cap, firstReq);
         expectSuccess = false;
-        expectErrorCode = ?("VALIDATION_ERROR");
+        expectErrorCode = ?("INVALID_INPUT");
         expectedOutputKeys = [];
       });
     };
@@ -112,7 +113,7 @@ module {
           description = "Pass empty string for required string field '" # f.key # "' — expect validation error";
           inputJson = buildInputWithValue(cap, f, "\"\"");
           expectSuccess = false;
-          expectErrorCode = ?("VALIDATION_ERROR");
+          expectErrorCode = ?("INVALID_INPUT");
           expectedOutputKeys = [];
         });
       };
@@ -125,7 +126,7 @@ module {
       capabilityName = cap.name;
       category = #Determinism;
       description = "Run same input twice and verify identical outputs";
-      inputJson = buildRequiredInput(cap);
+      inputJson = canonicalInput;
       expectSuccess = true;
       expectErrorCode = null;
       expectedOutputKeys = [];
@@ -137,10 +138,36 @@ module {
       capabilityName = cap.name;
       category = #OutputSchema;
       description = "Verify output contains all documented output keys";
-      inputJson = buildRequiredInput(cap);
+      inputJson = canonicalInput;
       expectSuccess = true;
       expectErrorCode = null;
       expectedOutputKeys = cap.outputs.map<CapTypes.CapabilityOutput, Text>(func(o) { o.key });
+    });
+
+    // 10. Optional fields combination test (all optional fields together)
+    if (optionals.size() > 1) {
+      cases.add({
+        id = cap.name # "::optional_all";
+        capabilityName = cap.name;
+        category = #OptionalFieldCombination;
+        description = "Execute with required fields plus all optional fields";
+        inputJson = buildInputWithAllOptionals(cap);
+        expectSuccess = true;
+        expectErrorCode = null;
+        expectedOutputKeys = [];
+      });
+    };
+
+    // 11. Error handling test: malformed JSON should fail validation
+    cases.add({
+      id = cap.name # "::error_malformed_json";
+      capabilityName = cap.name;
+      category = #ErrorHandling;
+      description = "Execute with malformed JSON — expect validation error";
+      inputJson = "{\"malformed\":";
+      expectSuccess = false;
+      expectErrorCode = ?("INVALID_INPUT");
+      expectedOutputKeys = [];
     });
 
     cases.toArray();
@@ -185,6 +212,12 @@ module {
   ) : Text {
     let required = cap.inputs.filter(func(i) { i.required });
     let fields = required.concat([optionalField]);
+    buildJsonObject(fields);
+  };
+
+  /// Build input JSON with all required fields and all optional fields.
+  public func buildInputWithAllOptionals(cap : CapTypes.CapabilityInfo) : Text {
+    let fields = cap.inputs;
     buildJsonObject(fields);
   };
 
@@ -368,13 +401,17 @@ module {
       };
     };
 
-    // Check determinism: second run must match first
+    // Check determinism: second run must also succeed and match first output
     if (passed and testCase.category == #Determinism) {
       switch (secondResult) {
         case (?second) {
+          if (not second.success) {
+            passed := false;
+            failureReason := ?("Non-deterministic behavior: second run failed");
+          };
           let out1 = switch (result.output) { case (?o) o; case null "" };
           let out2 = switch (second.output) { case (?o) o; case null "" };
-          if (not jsonEqual(out1, out2)) {
+          if (passed and not jsonEqual(out1, out2)) {
             passed := false;
             failureReason := ?("Non-deterministic output: first run and second run produced different results");
           };
@@ -409,6 +446,16 @@ module {
       parts.add("\"" # f.key # "\": " # defaultValueForField(f));
     };
     "{" # parts.values().join(", ") # "}";
+  };
+
+  /// Picks a stable success input for broad smoke tests.
+  /// Prefers documented example input when present, otherwise falls back to generated required-only input.
+  func canonicalSuccessInput(cap : CapTypes.CapabilityInfo) : Text {
+    if (cap.exampleInput != "{}") {
+      cap.exampleInput;
+    } else {
+      buildRequiredInput(cap);
+    };
   };
 
   func normalizeJson(s : Text) : Text {
