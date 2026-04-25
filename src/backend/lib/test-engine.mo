@@ -67,7 +67,7 @@ module {
         description = "Execute with required field '" # reqField.key # "' omitted — expect validation error";
         inputJson = buildInputMissingRequired(cap, reqField);
         expectSuccess = false;
-        expectErrorCode = ?("VALIDATION_ERROR");
+        expectErrorCode = ?("INVALID_INPUT");
         expectedOutputKeys = [];
       });
     };
@@ -81,7 +81,7 @@ module {
         description = "Execute with completely empty JSON object — expect validation error";
         inputJson = "{}";
         expectSuccess = false;
-        expectErrorCode = ?("VALIDATION_ERROR");
+        expectErrorCode = ?("INVALID_INPUT");
         expectedOutputKeys = [];
       });
     };
@@ -96,7 +96,7 @@ module {
         description = "Pass wrong type for required field '" # firstReq.key # "' — expect validation error";
         inputJson = buildInputWrongType(cap, firstReq);
         expectSuccess = false;
-        expectErrorCode = ?("VALIDATION_ERROR");
+        expectErrorCode = ?("INVALID_INPUT");
         expectedOutputKeys = [];
       });
     };
@@ -112,7 +112,7 @@ module {
           description = "Pass empty string for required string field '" # f.key # "' — expect validation error";
           inputJson = buildInputWithValue(cap, f, "\"\"");
           expectSuccess = false;
-          expectErrorCode = ?("VALIDATION_ERROR");
+          expectErrorCode = ?("INVALID_INPUT");
           expectedOutputKeys = [];
         });
       };
@@ -368,13 +368,17 @@ module {
       };
     };
 
-    // Check determinism: second run must match first
+    // Check determinism: second run must also succeed and match first output
     if (passed and testCase.category == #Determinism) {
       switch (secondResult) {
         case (?second) {
+          if (not second.success) {
+            passed := false;
+            failureReason := ?("Non-deterministic behavior: second run failed");
+          };
           let out1 = switch (result.output) { case (?o) o; case null "" };
           let out2 = switch (second.output) { case (?o) o; case null "" };
-          if (not jsonEqual(out1, out2)) {
+          if (passed and not jsonEqual(out1, out2)) {
             passed := false;
             failureReason := ?("Non-deterministic output: first run and second run produced different results");
           };
